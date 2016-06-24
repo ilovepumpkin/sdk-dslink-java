@@ -5,11 +5,11 @@ import org.dsa.iot.dslink.node.value.Value;
 import org.dsa.iot.dslink.util.Objects;
 import org.dsa.iot.dslink.util.handler.CompleteHandler;
 import org.dsa.iot.dslink.util.handler.Handler;
-import org.dsa.iot.historian.utils.QueryData;
-import org.dsa.iot.historian.utils.TimeParser;
+import org.dsa.iot.historian.utils.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -94,6 +94,45 @@ public abstract class Database {
      * @see TimeParser
      */
     public abstract void write(String path, Value value, long ts);
+
+    /**
+     * An override hook for handling batch writes. The default implemenation calls write
+     * for each element of the queue.  Overrides should do some pre-processing, call
+     * this super implementation, then post-processing.  Otherwise, review the source
+     * for all state that needs to be managed with each write.
+     *
+     * @param deque The values needing to be written.
+     * @param loggingType It's important to know what type of logging is taking place.
+     *                    For example, if the logging type is INTERVAL, use the timestamp
+     *                    of the WatchUpdate rather than that of the value.
+     */
+    protected void write(Deque<WatchUpdate> deque, LoggingType loggingType) {
+        WatchUpdate update = null;
+        Value value = null;
+        Watch watch = null;
+        long time = 0;
+        boolean isInterval = (LoggingType.INTERVAL == loggingType);
+        for (int i = 0, len = deque.size(); i < len; i++) {
+            update = deque.poll();
+            value = update.getUpdate().getValue();
+            if (value != null) {
+                if (isInterval) {
+                    time = update.getIntervalTimestamp();
+                } else {
+                    time = value.getTime();
+                }
+                watch = update.getWatch();
+                write(watch.getPath(), value, time);
+                if (watch.hasHandlers()) {
+                    watch.notifyHandlers(new QueryData(value, time));
+                }
+                if (isInterval) {
+                    value.setTime(time);
+                    watch.handleLastWritten(value);
+                }
+            }
+        }
+    }
 
     /**
      * Times must be in UTC. At the end of the query, the {@code handler} must

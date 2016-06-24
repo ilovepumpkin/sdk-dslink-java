@@ -38,7 +38,7 @@ public class WatchGroup {
     private final Database db;
     private final Node node;
 
-    private final Queue<WatchUpdate> queue = new ConcurrentLinkedDeque<>();
+    private final Deque<WatchUpdate> queue = new ConcurrentLinkedDeque<>();
     private final Object writeLoopLock = new Object();
     private final ScheduledExecutorService intervalScheduler;
 
@@ -373,18 +373,12 @@ public class WatchGroup {
         }
     }
 
+    /**
+     * Passes a non-empty queue to Database.write(queue,loggingType).
+     */
     private void handleQueue() {
-        int size = queue.size();
-
-        WatchUpdate update = null;
-        for (int i = 0; i < size; ++i) {
-            update = queue.poll();
-            dbWrite(update);
-        }
-
-        if (update != null) {
-            Value value = update.getUpdate().getValue();
-            update.getWatch().handleLastWritten(value);
+        if (queue.size() > 0) {
+            db.write(queue, loggingType);
         }
     }
 

@@ -224,6 +224,17 @@ public class Watch {
         }
     }
 
+    /**
+     * Whether or not the watch has any handlers.
+     */
+    public boolean hasHandlers() {
+        rtLock.readLock().lock();
+        try {
+            return rtHandlers.size() > 0;
+        } finally {
+            rtLock.readLock().unlock();
+        }
+    }
     public void removeHandler(Handler<QueryData> handler) {
         rtLock.writeLock().lock();
         try {
